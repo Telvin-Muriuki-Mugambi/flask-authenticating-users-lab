@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from flask import Flask, make_response, jsonify, request, session
+from flask import Flask, make_response, request, session
 from flask_migrate import Migrate
 from flask_restful import Api, Resource
 
@@ -17,6 +17,36 @@ migrate = Migrate(app, db)
 db.init_app(app)
 
 api = Api(app)
+
+class Login(Resource):
+
+    def post(self):
+        data = request.get_json(silent=True) or {}
+        user = User.query.filter_by(username=data.get('username')).first()
+
+        if user is None:
+            return {'message': 'User not found'}, 404
+
+        session['user_id'] = user.id
+        return UserSchema().dump(user), 200
+
+class Logout(Resource):
+
+    def delete(self):
+        session.pop('user_id', None)
+        return {}, 204
+
+class CheckSession(Resource):
+
+    def get(self):
+        user_id = session.get('user_id')
+        user = User.query.filter_by(id=user_id).first() if user_id is not None else None
+
+        if user is None:
+            session.pop('user_id', None)
+            return {}, 401
+
+        return UserSchema().dump(user), 200
 
 class ClearSession(Resource):
 
@@ -49,6 +79,9 @@ class ShowArticle(Resource):
         return {'message': 'Maximum pageview limit reached'}, 401
 
 api.add_resource(ClearSession, '/clear')
+api.add_resource(Login, '/login')
+api.add_resource(Logout, '/logout')
+api.add_resource(CheckSession, '/check_session')
 api.add_resource(IndexArticle, '/articles')
 api.add_resource(ShowArticle, '/articles/<int:id>')
 
